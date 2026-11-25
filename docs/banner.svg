@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="banner-title banner-desc" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="banner-title">Zen Link Groups</title>
+  <desc id="banner-desc">A mod for Zen Browser. A News page with three links, and the browser sidebar where the tabs opened from those links sit indented under the News tab, joined by a colored tree line. Two more groups, Forum and a collapsed Docs, use other colors.</desc>
+
+  <!-- Source of docs/banner.png. Group colors are the first three of the mod's dark palette. -->
+  <defs>
+    <clipPath id="canvas">
+      <rect width="1280" height="640" rx="28"/>
+    </clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0c0e13"/>
+      <stop offset="1" stop-color="#151927"/>
+    </linearGradient>
+    <radialGradient id="glow-blue" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6ea2ff" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#6ea2ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow-purple" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#c18cf2" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#c18cf2" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow-teal" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3fcfc1" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#3fcfc1" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6ea2ff"/>
+      <stop offset="1" stop-color="#c18cf2"/>
+    </linearGradient>
+    <linearGradient id="title-accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8db6ff"/>
+      <stop offset="1" stop-color="#c9a0f5"/>
+    </linearGradient>
+    <filter id="window-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="26" stdDeviation="34" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M1 1.5 L8 5 L1 8.5 Z" fill="#6ea2ff"/>
+    </marker>
+  </defs>
+
+  <g clip-path="url(#canvas)">
+    <rect width="1280" height="640" fill="url(#bg)"/>
+    <ellipse cx="1010" cy="110" rx="560" ry="420" fill="url(#glow-blue)"/>
+    <ellipse cx="720" cy="660" rx="460" ry="340" fill="url(#glow-purple)"/>
+    <ellipse cx="110" cy="60" rx="420" ry="320" fill="url(#glow-teal)"/>
+
+    <!-- Left: name and pitch -->
+    <g>
+      <rect x="72" y="118" width="52" height="52" rx="14" fill="url(#mark)"/>
+      <g fill="#0c0e13" stroke="#0c0e13" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="83" y="129.5" width="30" height="7" rx="3.5" stroke="none"/>
+        <path d="M88 141 V152.5 Q88 158.5 94 158.5 H96 M88 146 H96" fill="none" stroke-width="2.6"/>
+        <rect x="99.5" y="143" width="13.5" height="6" rx="3" stroke="none"/>
+        <rect x="99.5" y="155.5" width="13.5" height="6" rx="3" stroke="none"/>
+      </g>
+      <text x="140" y="149.5" font-size="13" font-weight="600" letter-spacing="1.7" fill="#a7b0c4">MOD FOR ZEN BROWSER</text>
+
+      <text x="68" y="262" font-size="78" font-weight="800" letter-spacing="-2.6" fill="#f4f6fb">Zen Link</text>
+      <text x="68" y="342" font-size="78" font-weight="800" letter-spacing="-2.6" fill="url(#title-accent)">Groups</text>
+
+      <text font-size="22" fill="#b7bece">
+        <tspan x="72" y="396">Tabs opened from links group under</tspan>
+        <tspan x="72" y="427">the tab they came from.</tspan>
+      </text>
+
+      <g font-size="16" fill="#98a1b4">
+        <circle cx="78" cy="478.5" r="5" fill="#6ea2ff"/>
+        <text x="96" y="484">A color-coded tree for every source tab</text>
+        <circle cx="78" cy="510.5" r="5" fill="#c18cf2"/>
+        <text x="96" y="516">Collapse, drag tabs in or out, ungroup</text>
+        <circle cx="78" cy="542.5" r="5" fill="#3fcfc1"/>
+        <text x="96" y="548">Survives restarts, shared by synced windows</text>
+      </g>
+    </g>
+
+    <!-- Right: browser window, sidebar on the left and the page next to it -->
+    <g filter="url(#window-shadow)">
+      <rect x="560" y="92" width="780" height="620" rx="18" fill="#1a1d27"/>
+    </g>
+    <rect x="560.5" y="92.5" width="779" height="619" rx="17.5" fill="none" stroke="#fff" stroke-opacity="0.1"/>
+
+    <!-- Sidebar chrome -->
+    <g fill="#fff" fill-opacity="0.2">
+      <circle cx="584" cy="118" r="6"/>
+      <circle cx="604" cy="118" r="6"/>
+      <circle cx="624" cy="118" r="6"/>
+    </g>
+    <rect x="570" y="142" width="256" height="40" rx="12" fill="#fff" fill-opacity="0.07"/>
+    <text x="588" y="167" font-size="14.5" fill="#a9b0bf">news.example.com</text>
+    <rect x="576" y="197" width="244" height="1" fill="#fff" fill-opacity="0.09"/>
+
+    <!-- Tabs. Rows are 40 tall on a 44 pitch; members are indented by 20. -->
+    <g font-size="16" font-weight="500">
+      <!-- News group (blue) -->
+      <rect x="570" y="212" width="256" height="40" rx="11" fill="#fff" fill-opacity="0.11"/>
+      <rect x="582" y="223" width="18" height="18" rx="5" fill="#fff" fill-opacity="0.34"/>
+      <text x="612" y="237.5" fill="#f1f3f8">News</text>
+      <rect x="772" y="220" width="46" height="24" rx="12" fill="#6ea2ff"/>
+      <text x="787.5" y="236.8" font-size="13.5" font-weight="700" text-anchor="middle" fill="#000" fill-opacity="0.85">3</text>
+      <path d="M799 230 L803.5 234.5 L808 230" fill="none" stroke="#000" stroke-opacity="0.85" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <path d="M591 246 V357 Q591 364 598 364" fill="none" stroke="#6ea2ff" stroke-width="2.5" stroke-linecap="round"/>
+
+      <rect x="602" y="267" width="18" height="18" rx="5" fill="#fff" fill-opacity="0.24"/>
+      <text x="632" y="281.5" fill="#cfd4de">Article 1</text>
+      <rect x="602" y="311" width="18" height="18" rx="5" fill="#fff" fill-opacity="0.24"/>
+      <text x="632" y="325.5" fill="#cfd4de">Article 2</text>
+      <rect x="602" y="355" width="18" height="18" rx="5" fill="#fff" fill-opacity="0.24"/>
+      <text x="632" y="369.5" fill="#cfd4de">Article 3</text>
+
+      <!-- Forum group (purple) -->
+      <rect x="582" y="399" width="18" height="18" rx="5" fill="#fff" fill-opacity="0.24"/>
+      <text x="612" y="413.5" fill="#cfd4de">Forum</text>
+      <rect x="772" y="396" width="46" height="24" rx="12" fill="#c18cf2"/>
+      <text x="787.5" y="412.8" font-size="13.5" font-weight="700" text-anchor="middle" fill="#000" fill-opacity="0.85">2</text>
+      <path d="M799 406 L803.5 410.5 L808 406" fill="none" stroke="#000" stroke-opacity="0.85" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <path d="M591 422 V489 Q591 496 598 496" fill="none" stroke="#c18cf2" stroke-width="2.5" stroke-linecap="round"/>
+
+      <rect x="602" y="443" width="18" height="18" rx="5" fill="#fff" fill-opacity="0.24"/>
+      <text x="632" y="457.5" fill="#cfd4de">Thread 1</text>
+      <rect x="602" y="487" width="18" height="18" rx="5" fill="#fff" fill-opacity="0.24"/>
+      <text x="632" y="501.5" fill="#cfd4de">Thread 2</text>
+
+      <!-- Docs group (teal), collapsed -->
+      <rect x="582" y="531" width="18" height="18" rx="5" fill="#fff" fill-opacity="0.24"/>
+      <text x="612" y="545.5" fill="#cfd4de">Docs</text>
+      <rect x="772" y="528" width="46" height="24" rx="12" fill="#3fcfc1"/>
+      <text x="787.5" y="544.8" font-size="13.5" font-weight="700" text-anchor="middle" fill="#000" fill-opacity="0.85">4</text>
+      <path d="M801.5 535.5 L806 540 L801.5 544.5" fill="none" stroke="#000" stroke-opacity="0.85" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- An ungrouped tab -->
+      <rect x="582" y="575" width="18" height="18" rx="5" fill="#fff" fill-opacity="0.24"/>
+      <text x="612" y="589.5" fill="#cfd4de">Mail</text>
+    </g>
+
+    <!-- The page the News tab shows -->
+    <rect x="840" y="104" width="500" height="620" rx="14" fill="#0e1016"/>
+    <rect x="840.5" y="104.5" width="499" height="619" rx="13.5" fill="none" stroke="#fff" stroke-opacity="0.07"/>
+
+    <text x="884" y="174" font-size="32" font-weight="700" letter-spacing="-0.6" fill="#f1f3f8">News</text>
+    <rect x="884" y="192" width="180" height="9" rx="4.5" fill="#fff" fill-opacity="0.09"/>
+
+    <g font-size="20" font-weight="600" fill="#6ea2ff" text-decoration="underline">
+      <text x="884" y="254">Article 1</text>
+      <text x="884" y="342">Article 2</text>
+      <text x="884" y="430">Article 3</text>
+    </g>
+    <g fill="#fff" fill-opacity="0.09">
+      <rect x="884" y="270" width="330" height="9" rx="4.5"/>
+      <rect x="884" y="288" width="270" height="9" rx="4.5"/>
+      <rect x="884" y="358" width="310" height="9" rx="4.5"/>
+      <rect x="884" y="376" width="220" height="9" rx="4.5"/>
+      <rect x="884" y="446" width="340" height="9" rx="4.5"/>
+      <rect x="884" y="464" width="250" height="9" rx="4.5"/>
+      <rect x="884" y="536" width="320" height="9" rx="4.5"/>
+      <rect x="884" y="554" width="280" height="9" rx="4.5"/>
+      <rect x="884" y="572" width="300" height="9" rx="4.5"/>
+      <rect x="884" y="626" width="330" height="9" rx="4.5"/>
+    </g>
+    <rect x="884" y="510" width="130" height="12" rx="6" fill="#fff" fill-opacity="0.15"/>
+    <rect x="884" y="600" width="160" height="12" rx="6" fill="#fff" fill-opacity="0.15"/>
+
+    <rect x="986" y="412.5" width="76" height="25" rx="7.5" fill="#fff" fill-opacity="0.08" stroke="#fff" stroke-opacity="0.14"/>
+    <text x="1024" y="429.5" font-size="12.5" font-weight="600" text-anchor="middle" fill="#c5cbd8">⌘ click</text>
+
+    <!-- Each link leads to the tab it opened -->
+    <g fill="none" stroke="#6ea2ff" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 6" marker-end="url(#arrow)">
+      <path d="M873 247 C846 247 846 276 819 276"/>
+      <path d="M873 335 C846 335 846 320 819 320"/>
+      <path d="M873 423 C842 423 850 364 819 364"/>
+    </g>
+  </g>
+</svg>

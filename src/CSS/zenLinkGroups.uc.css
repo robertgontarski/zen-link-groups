@@ -1,0 +1,145 @@
+/* ==UserScript==
+// @name           Zen Link Groups
+// @description    Tree lines, colors and the collapse toggle for link groups
+// ==/UserScript==*/
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* No default @namespace on purpose: browser.xhtml has an HTML root, and a XUL
+ * default namespace would stop :root from matching it. */
+
+:root {
+  /* How far members are pushed right, where the tree line runs (from the
+   * left edge of the root tab: the middle of its icon), and where the elbow
+   * into the last member ends (from the member's left edge). */
+  --zlg-indent: 18px;
+  --zlg-line-x: 19.5px;
+  --zlg-line-width: 2px;
+  --zlg-elbow-reach: 8px;
+  --zlg-elbow-radius: 7px;
+  /* Zen's tab boxes touch; lines reach this far into the tab above so they
+   * stay continuous if a theme adds spacing between tabs. */
+  --zlg-gap: 2px;
+
+  --zlg-c0: light-dark(#2f6fec, #6ea2ff);
+  --zlg-c1: light-dark(#9a4fd6, #c18cf2);
+  --zlg-c2: light-dark(#0f8f86, #3fcfc1);
+  --zlg-c3: light-dark(#d9661a, #ff9f59);
+  --zlg-c4: light-dark(#cf3f8a, #f383bd);
+  --zlg-c5: light-dark(#2f8f3a, #6ad577);
+  --zlg-c6: light-dark(#a87d00, #f0c43c);
+  --zlg-c7: light-dark(#d23b3b, #ff7b7b);
+}
+
+.tabbrowser-tab {
+  &[zlg-color="0"] { --zlg-color: var(--zlg-c0); }
+  &[zlg-color="1"] { --zlg-color: var(--zlg-c1); }
+  &[zlg-color="2"] { --zlg-color: var(--zlg-c2); }
+  &[zlg-color="3"] { --zlg-color: var(--zlg-c3); }
+  &[zlg-color="4"] { --zlg-color: var(--zlg-c4); }
+  &[zlg-color="5"] { --zlg-color: var(--zlg-c5); }
+  &[zlg-color="6"] { --zlg-color: var(--zlg-c6); }
+  &[zlg-color="7"] { --zlg-color: var(--zlg-c7); }
+
+  &[zlg-hidden] {
+    display: none !important;
+  }
+}
+
+/* ---- Expanded sidebar: a tree under the root ---- */
+
+:root[zen-sidebar-expanded="true"] .tabbrowser-tab {
+  /* Zen indents tabs by --zen-folder-indent; members borrow it. */
+  &[zlg-role="member"] {
+    --zen-folder-indent: var(--zlg-indent) !important;
+  }
+
+  /* Trunk: from the root's icon down to the next tab. */
+  &[zlg-role="root"][zlg-trunk]::after,
+  &[zlg-role="member"]::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    border-inline-start: var(--zlg-line-width) solid var(--zlg-color);
+    z-index: 1;
+  }
+
+  &[zlg-role="root"][zlg-trunk]::after {
+    inset-inline-start: calc(var(--zlg-line-x) - var(--zlg-line-width) / 2);
+    top: 70%;
+    bottom: calc(-1 * var(--zlg-gap));
+  }
+
+  &[zlg-role="member"]::before {
+    inset-inline-start: calc(var(--zlg-line-x) - var(--zlg-indent) - var(--zlg-line-width) / 2);
+    top: calc(-1 * var(--zlg-gap));
+    bottom: 0;
+  }
+
+  /* Elbow into the last member. */
+  &[zlg-role="member"][zlg-last]::before {
+    bottom: 50%;
+    width: calc(var(--zlg-elbow-reach) - var(--zlg-line-x) + var(--zlg-indent) - var(--zlg-line-width) / 2);
+    border-bottom: var(--zlg-line-width) solid var(--zlg-color);
+    border-end-start-radius: var(--zlg-elbow-radius);
+  }
+
+  /* Root outside this list (pinned, Essentials): the run starts with a dot. */
+  &[zlg-role="member"][zlg-orphan]::before {
+    top: 30%;
+    border-start-start-radius: var(--zlg-line-width);
+  }
+}
+
+/* ---- Root: count and collapse toggle ---- */
+
+.zlg-toggle {
+  flex-shrink: 0;
+  gap: 2px;
+  margin-inline: 4px 2px;
+  padding: 1px 4px 1px 6px;
+  border-radius: 99px;
+  /* Solid group color: readable on any tab background, selected or not. */
+  color: light-dark(white, rgb(0 0 0 / 0.85));
+  background-color: var(--zlg-color);
+  font-size: 0.8em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  opacity: 0.9;
+
+  &:hover {
+    opacity: 1;
+  }
+
+  & > .zlg-count {
+    margin: 0;
+  }
+
+  & > .zlg-twisty {
+    width: 10px;
+    height: 10px;
+    list-style-image: url("chrome://global/skin/icons/arrow-down-12.svg");
+    -moz-context-properties: fill;
+    fill: currentColor;
+    transition: rotate 0.15s ease;
+
+    .tabbrowser-tab[zlg-collapsed] & {
+      rotate: -90deg;
+    }
+  }
+
+  /* Essentials are icon tiles and the collapsed sidebar has no room. */
+  .tabbrowser-tab[zen-essential] &,
+  :root:not([zen-sidebar-expanded="true"]) & {
+    display: none;
+  }
+}
+
+/* Essentials and the collapsed sidebar: a colored ring instead of a tree. */
+.tabbrowser-tab[zen-essential][zlg-role="root"] .tab-background,
+:root:not([zen-sidebar-expanded="true"]) .tabbrowser-tab[zlg-role] .tab-background {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--zlg-color) 70%, transparent) !important;
+}

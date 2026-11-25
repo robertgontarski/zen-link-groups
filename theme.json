@@ -1,0 +1,24 @@
+{
+  "id": "zen-link-groups",
+  "name": "Zen Link Groups",
+  "description": "Tabs opened from links group under the tab they came from, with a colored tree line, collapsing and drag and drop.",
+  "homepage": "https://github.com/robertgontarski/zen-link-groups",
+  "readme": "https://raw.githubusercontent.com/robertgontarski/zen-link-groups/main/README.md",
+  "image": "https://raw.githubusercontent.com/robertgontarski/zen-link-groups/main/docs/social-preview.png",
+  "author": "robertgontarski",
+  "version": "1.0.0",
+  "tags": ["tabs", "tab groups", "tree", "sidebar", "links"],
+  "fork": ["zen"],
+  "style": {
+    "chrome": "src/CSS/zenLinkGroups.uc.css"
+  },
+  "scripts": {
+    "src/JS/zenLinkGroups.uc.js": {
+      "name": "Zen Link Groups",
+      "description": "Groups tabs opened from links under the tab they came from.",
+      "include": ["chrome://browser/content/browser.xhtml"]
+    }
+  },
+  "createdAt": "2026-11-25",
+  "updatedAt": "2026-11-25"
+}

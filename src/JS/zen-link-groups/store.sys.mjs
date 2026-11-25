@@ -9,7 +9,8 @@
  * `<profile>/zen-link-groups.json`.
  */
 
-import { GroupState } from "chrome://userscripts/content/zen-link-groups/model.sys.mjs";
+// Relative, so it resolves wherever the loader serves this folder from.
+import { GroupState } from "./model.sys.mjs";
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {

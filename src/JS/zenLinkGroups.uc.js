@@ -15,7 +15,14 @@
     return;
   }
 
-  const BASE = "chrome://userscripts/content/zen-link-groups/";
+  // The modules sit in a folder next to this script, whose URL depends on the
+  // loader: chrome://userscripts/content/ under fx-autoconfig,
+  // chrome://sine/content/<mod id>/src/JS/ under Sine.
+  const SELF = String(Components.stack.filename ?? "").split(" -> ").pop();
+  const HERE = SELF.startsWith("chrome://")
+    ? SELF.slice(0, SELF.lastIndexOf("/") + 1)
+    : "chrome://userscripts/content/";
+  const BASE = HERE + "zen-link-groups/";
   const { LinkGroupsStore: store } = ChromeUtils.importESModule(BASE + "store.sys.mjs");
   const model = ChromeUtils.importESModule(BASE + "model.sys.mjs");
 

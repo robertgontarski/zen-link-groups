@@ -115,7 +115,9 @@
   }
 
   & > .zlg-count {
-    margin: 0;
+    /* Sine applies this file as a user sheet, where a plain declaration loses
+     * to the browser's own margin for XUL labels. */
+    margin: 0 !important;
   }
 
   & > .zlg-twisty {

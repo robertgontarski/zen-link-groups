@@ -66,7 +66,9 @@ By default the installer picks the profile this Zen install starts with (`instal
 
 **When macOS blocks writing to Zen.app.** Open *System Settings → Privacy & Security → App Management*, enable your terminal there and run the installer again.
 
-**If you use [Sine](https://github.com/CosmoCreeper/Sine).** Sine is not supported yet, and you should not run `install.sh` next to it. Sine keeps its own bootloader in the same place inside the app (`config.js` and `defaults/`), and the installer would replace it, leaving the old `config.js` as a backup. Sine also loads only the scripts a mod declares in its `theme.json`, from `chrome://sine/content/<mod id>/`, while this mod imports its modules from fx-autoconfig's `chrome://userscripts/content/`.
+**If you use [Sine](https://github.com/CosmoCreeper/Sine).** Do not run `install.sh`: Sine keeps its own bootloader in the same place inside the app (`config.js` and `defaults/`), and the installer would replace it, leaving the old `config.js` as a backup. Install the mod through Sine instead, from this repository's URL. The repository carries the `theme.json` Sine reads. Until the mod is listed in Sine's marketplace, Sine runs its script only when `sine.allow-unsafe-js` is set to `true` in `about:config`.
+
+Sine support is new. The end-to-end test covers the way Sine serves and loads the mod (`--layout sine`, see [Tests](#tests)), but the mod has not been tried in a real Sine install yet.
 
 ### Uninstall
 
@@ -102,6 +104,7 @@ src/JS/zenLinkGroups.uc.js              window controller: tab events, drag and 
 src/JS/zen-link-groups/model.sys.mjs    pure group logic (no browser APIs)
 src/JS/zen-link-groups/store.sys.mjs    state shared by all windows, and saving it
 src/CSS/zenLinkGroups.uc.css            indents, lines, colors, badge
+theme.json                              manifest for the Sine mod manager
 vendor/fx-autoconfig/                   pinned copy of the loader
 test/                                   unit and end-to-end tests
 ```
@@ -111,9 +114,12 @@ test/                                   unit and end-to-end tests
 ```sh
 node --test test/*.test.mjs                  # group logic, 20 tests
 python3 -I test/e2e.py --out /tmp/zlg-e2e    # end to end on a real Zen, headless
+python3 -I test/e2e.py --layout sine --out /tmp/zlg-e2e-sine   # the same, installed the way Sine does it
 ```
 
 The end-to-end test does not touch your profile or `Zen.app`. It starts Zen through Marionette on a temporary profile, turns the loader on in the running browser and clicks real links. It checks 15 scenarios, including drag and drop, the context menu, a second window and a restart, and saves sidebar screenshots to the `--out` directory. With `--headed` you can watch the browser window. It needs only Python 3 (standard library).
+
+`--layout sine` runs the same scenarios with the mod installed the way the Sine mod manager does it: served from `chrome://sine/content/<mod id>/`, with the script named in `theme.json` loaded into each window and the style applied as a user sheet. Sine itself is not started.
 
 CI runs the unit tests and lints the installer. The end-to-end test needs macOS with Zen installed, so it runs locally only.
 

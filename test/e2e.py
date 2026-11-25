@@ -9,6 +9,12 @@ and checks the groups. It finally restarts Zen on the same profile to check
 that groups survive a restart. Sidebar screenshots go to the output directory.
 
     python3 -I test/e2e.py [--zen /Applications/Zen.app] [--out DIR] [--headed]
+                           [--layout fx-autoconfig|sine]
+
+`--layout sine` checks the mod the way the Sine mod manager installs it,
+without running Sine itself: the repository sits in chrome/sine-mods/<id>,
+is served as chrome://sine/content/<id>/, the script declared in theme.json
+is loaded into each window, and the style is applied as a user sheet.
 
 Standard library only.
 """
@@ -119,14 +125,44 @@ class Marionette:
         return handles.get("value", handles) if isinstance(handles, dict) else handles
 
 
-def build_profile(path):
+def build_profile(path, layout):
     shutil.rmtree(path, ignore_errors=True)
     chrome = path / "chrome"
-    shutil.copytree(ROOT / "vendor" / "fx-autoconfig" / "profile" / "chrome" / "utils", chrome / "utils")
-    shutil.copytree(ROOT / "src" / "JS", chrome / "JS")
-    shutil.copytree(ROOT / "src" / "CSS", chrome / "CSS")
+    if layout == "sine":
+        # What Sine leaves in a profile: the mod's repository under
+        # sine-mods/<id>, its bootloader's mapping of that folder to
+        # chrome://sine/content/, and one sheet importing every mod's style.
+        theme = json.loads((ROOT / "theme.json").read_text())
+        mod = chrome / "sine-mods" / theme["id"]
+        shutil.copytree(ROOT / "src", mod / "src")
+        shutil.copy(ROOT / "theme.json", mod)
+        (chrome / "utils").mkdir(parents=True)
+        (chrome / "utils" / "chrome.manifest").write_text("content sine ../sine-mods/\n")
+        style = (mod / theme["style"]["chrome"]).as_uri()
+        (chrome / "sine-mods" / "chrome.css").write_text(f'@import "{style}";\n')
+    else:
+        shutil.copytree(ROOT / "vendor" / "fx-autoconfig" / "profile" / "chrome" / "utils", chrome / "utils")
+        shutil.copytree(ROOT / "src" / "JS", chrome / "JS")
+        shutil.copytree(ROOT / "src" / "CSS", chrome / "CSS")
     lines = [f"user_pref({json.dumps(k)}, {json.dumps(v)});" for k, v in PREFS.items()]
     (path / "user.js").write_text("\n".join(lines) + "\n")
+
+
+def describe_layout(layout, profile):
+    """Where the store module lives, and what the harness has to inject."""
+    if layout != "sine":
+        # fx-autoconfig injects the script and the style into new windows itself.
+        return {"store": "chrome://userscripts/content/zen-link-groups/store.sys.mjs", "inject": None}
+    theme = json.loads((ROOT / "theme.json").read_text())
+    (script,) = theme["scripts"]
+    base = f"chrome://sine/content/{theme['id']}/"
+    return {
+        "store": f"{base}{script.rpartition('/')[0]}/zen-link-groups/store.sys.mjs",
+        "inject": {
+            "script": base + script,
+            "sheet": (profile / "chrome" / "sine-mods" / "chrome.css").as_uri(),
+        },
+    }
 
 
 # --- chrome-side snippets -------------------------------------------------
@@ -137,17 +173,26 @@ WAIT_FOR_ZEN = (
 )
 
 # What config.js does at startup, then a new window for the loader to inject.
-BOOT_LOADER = """
+REGISTER_MANIFEST = """
 const manifest = Services.dirsvc.get("UChrm", Ci.nsIFile);
 manifest.append("utils");
 manifest.append("chrome.manifest");
 Components.manager.QueryInterface(Ci.nsIComponentRegistrar).autoRegister(manifest);
+"""
+
+BOOT_LOADER = """
 ChromeUtils.importESModule("chrome://userchromejs/content/boot.sys.mjs");
 """
 
+# `arguments[0]`, when set, is what Sine's manager does for a window on load.
 OPEN_MOD_WINDOW = """
 const win = OpenBrowserWindow();
 await new Promise(resolve => win.addEventListener("load", resolve, { once: true }));
+const inject = arguments[0];
+if (inject) {
+  Services.scriptloader.loadSubScriptWithOptions(inject.script, { target: win, ignoreCache: true });
+  win.windowUtils.loadSheet(Services.io.newURI(inject.sheet), win.windowUtils.USER_SHEET);
+}
 for (let i = 0; i < 100 && !win.gZenLinkGroups; i++) {
   await new Promise(resolve => setTimeout(resolve, 100));
 }
@@ -209,9 +254,7 @@ return [...anchor.parentElement.children]
 # Root label -> sorted member labels, for the whole window.
 GROUPS = """
 const byId = new Map(gBrowser.tabs.map(t => [t.id, t]));
-const { LinkGroupsStore } = ChromeUtils.importESModule(
-  "chrome://userscripts/content/zen-link-groups/store.sys.mjs"
-);
+const { LinkGroupsStore } = ChromeUtils.importESModule(arguments[0]);
 const result = {};
 for (const rootId of LinkGroupsStore.roots()) {
   const root = byId.get(rootId);
@@ -220,6 +263,28 @@ for (const rootId of LinkGroupsStore.roots()) {
     .sort();
 }
 return result;
+"""
+
+# What the stylesheet makes of a group: the trunk under the root, the line and
+# the elbow next to its members, the badge, the indent.
+DRAWN = """
+const root = gBrowser.tabs.find(t => t.label === arguments[0] && !t.closing);
+const members = gBrowser.tabs.filter(t => t.getAttribute("zlg-role") === "member" && !t.closing);
+const line = el => {
+  const style = getComputedStyle(el, el === root ? "::after" : "::before");
+  return [style.content, style.position, style.borderInlineStartWidth, style.borderInlineStartStyle].join(" ");
+};
+const first = getComputedStyle(members[0], "::before");
+const badge = getComputedStyle(root.querySelector(".zlg-toggle"));
+return {
+  trunk: line(root),
+  line: line(members[0]),
+  elbow: getComputedStyle(members.find(t => t.hasAttribute("zlg-last")), "::before").borderBottomStyle,
+  lineColor: first.borderInlineStartColor,
+  badgeColor: badge.backgroundColor,
+  countMargin: getComputedStyle(root.querySelector(".zlg-count")).margin,
+  indent: getComputedStyle(members[0]).getPropertyValue("--zen-folder-indent").trim(),
+};
 """
 
 RENDERED_GROUPS = """
@@ -270,22 +335,26 @@ return hidden;
 # Errors and console.error calls coming from the mod.
 MOD_ERRORS = """
 const pattern = /zenLinkGroups|zen-link-groups|ZenLinkGroups/;
+// The test profile may sit in a directory named after the mod: a path into it
+// is not a mention of the mod.
+const mentionsMod = text => pattern.test(text.replaceAll(PathUtils.profileDir, "<profile>"));
 const fromConsoleService = Services.console.getMessageArray()
   .filter(m => m instanceof Ci.nsIScriptError && !(m.flags & Ci.nsIScriptError.warningFlag))
-  .filter(m => pattern.test(`${m.sourceName} ${m.errorMessage}`))
-  .map(m => `${m.sourceName}:${m.lineNumber} ${m.errorMessage}`);
+  .map(m => `${m.sourceName}:${m.lineNumber} ${m.errorMessage}`)
+  .filter(mentionsMod);
 const storage = Cc["@mozilla.org/consoleAPI-storage;1"].getService(Ci.nsIConsoleAPIStorage);
 const fromConsoleApi = storage.getEvents()
   .filter(e => e.level === "error")
   .map(e => `${e.filename}:${e.lineNumber} ${(e.arguments || []).map(String).join(" ")}`)
-  .filter(text => pattern.test(text));
+  .filter(mentionsMod);
 return [...fromConsoleService, ...fromConsoleApi];
 """
 
 class Run:
-    def __init__(self, m, out):
+    def __init__(self, m, out, layout):
         self.m = m
         self.out = out
+        self.layout = layout
         self.failures = []
         self.shots = 0
 
@@ -344,6 +413,9 @@ class Run:
 
     def state(self, anchor="News"):
         return self.m.js(STATE, anchor)
+
+    def groups(self):
+        return self.m.js(GROUPS, self.layout["store"])
 
     def tab_eval(self, title, body, *extra):
         return self.m.js(
@@ -405,6 +477,13 @@ def scenario(run):
     run.check("members sit right under News", order.index("News") + 1 == order.index(members[0]["label"]), order)
     run.check("first and last members are marked", members[0]["first"] and members[-1]["last"], members)
     run.check("unrelated Mail tab stays ungrouped", tabs["Mail"]["role"] is None, tabs["Mail"])
+    drawn = run.m.js(DRAWN, "News")
+    solid = '"" absolute 2px solid'
+    run.check("the trunk and the member line are drawn", drawn["trunk"] == solid and drawn["line"] == solid, drawn)
+    run.check("the last member gets an elbow", drawn["elbow"] == "solid", drawn)
+    run.check("the badge has the color of the line", drawn["badgeColor"] == drawn["lineColor"], drawn)
+    run.check("the count sits tight in the badge", drawn["countMargin"] == "0px", drawn)
+    run.check("members are indented", drawn["indent"] == "18px", drawn)
     run.screenshot("group")
 
     print("2. A link from a member joins the same flat group")
@@ -521,16 +600,16 @@ def scenario(run):
 
     print("11. The state is saved to the profile")
     saved = run.m.js(
-        "const { LinkGroupsStore } = ChromeUtils.importESModule("
-        "'chrome://userscripts/content/zen-link-groups/store.sys.mjs');"
+        "const { LinkGroupsStore } = ChromeUtils.importESModule(arguments[0]);"
         "await LinkGroupsStore.flush();"
-        "return IOUtils.readJSON(PathUtils.join(PathUtils.profileDir, 'zen-link-groups.json'));"
+        "return IOUtils.readJSON(PathUtils.join(PathUtils.profileDir, 'zen-link-groups.json'));",
+        run.layout["store"],
     )
     run.check("file lists two groups", len(saved.get("groups", {})) == 2, saved)
 
     print("12. A second synced window shows the same groups")
-    expected = run.m.js(GROUPS)
-    run.m.js(OPEN_MOD_WINDOW)
+    expected = run.groups()
+    run.m.js(OPEN_MOD_WINDOW, run.layout["inject"])
     run.settle(1.5)
     run.m.send("WebDriver:SwitchToWindow", {"handle": run.m.window_handles()[-1], "focus": True})
     rendered = run.m.js(RENDERED_GROUPS)
@@ -539,7 +618,7 @@ def scenario(run):
     return expected
 
 
-def start_zen(args, profile, log_name):
+def start_zen(args, profile, layout, log_name):
     binary = Path(args.zen) / "Contents" / "MacOS" / "zen"
     cmd = [str(binary), "--marionette", "-no-remote", "-profile", str(profile)]
     if not args.headed:
@@ -551,8 +630,10 @@ def start_zen(args, profile, log_name):
     m.send("WebDriver:NewSession", {"capabilities": {}})
     m.context("chrome")
     m.wait(WAIT_FOR_ZEN, timeout=60, message="Zen startup")
-    m.js(BOOT_LOADER)
-    m.js(OPEN_MOD_WINDOW)
+    m.js(REGISTER_MANIFEST)
+    if not layout["inject"]:
+        m.js(BOOT_LOADER)
+    m.js(OPEN_MOD_WINDOW, layout["inject"])
     m.send("WebDriver:SwitchToWindow", {"handle": m.window_handles()[-1], "focus": True})
     return proc, m, log
 
@@ -574,16 +655,23 @@ def main():
     parser.add_argument("--zen", default="/Applications/Zen.app")
     parser.add_argument("--out", type=Path, default=Path(tempfile.gettempdir()) / "zen-link-groups-e2e")
     parser.add_argument("--headed", action="store_true", help="show the window instead of running headless")
+    parser.add_argument(
+        "--layout",
+        choices=("fx-autoconfig", "sine"),
+        default="fx-autoconfig",
+        help="install the mod as install.sh does, or as the Sine mod manager does",
+    )
     args = parser.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
     for old in args.out.glob("*.png"):
         old.unlink()
     profile = args.out / "profile"
-    build_profile(profile)
+    build_profile(profile, args.layout)
+    layout = describe_layout(args.layout, profile)
 
-    proc, m, log = start_zen(args, profile, "zen.log")
-    run = Run(m, args.out)
+    proc, m, log = start_zen(args, profile, layout, "zen.log")
+    run = Run(m, args.out, layout)
     try:
         expected = scenario(run)
         errors = m.js(MOD_ERRORS)
@@ -592,7 +680,7 @@ def main():
         stop_zen(proc, m, log, graceful=True)
 
     print("13. Groups survive a restart")
-    proc, m, log = start_zen(args, profile, "zen-restart.log")
+    proc, m, log = start_zen(args, profile, layout, "zen-restart.log")
     run.m = m
     try:
         run.settle(1.5)
@@ -609,7 +697,7 @@ def main():
         run.check("...and moves it below the group", order.index("Mail") == order.index("Thread 3") + 1, order)
         items = run.m.js(CONTEXT_MENU, "Article 1", "zlg-context-ungroup")
         run.check("a root's menu has no 'Remove from group'", items["zlg-context-remove"], items)
-        groups = run.m.js(GROUPS)
+        groups = run.groups()
         run.check("'Ungroup' dissolves the group", "Article 1" not in groups, groups)
         run.m.js(CONTEXT_MENU, "Forum", "zlg-context-close")
         try:
@@ -626,7 +714,7 @@ def main():
             "...but keeps a pinned root",
             run.m.js("return gBrowser.tabs.some(t => t.label === 'Forum' && t.pinned && !t.closing)"),
         )
-        run.check("no groups are left", run.m.js(GROUPS) == {}, run.m.js(GROUPS))
+        run.check("no groups are left", run.groups() == {}, run.groups())
         items = run.m.js(CONTEXT_MENU, "Mail", None)
         run.check("an ungrouped tab shows none of the items", all(items.values()), items)
         errors = m.js(MOD_ERRORS)

@@ -6,7 +6,7 @@
   "readme": "https://raw.githubusercontent.com/robertgontarski/zen-link-groups/main/README.md",
   "image": "https://raw.githubusercontent.com/robertgontarski/zen-link-groups/main/docs/social-preview.png",
   "author": "robertgontarski",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "tags": ["tabs", "tab groups", "tree", "sidebar", "links"],
   "fork": ["zen"],
   "style": {
@@ -20,5 +20,5 @@
     }
   },
   "createdAt": "2026-11-25",
-  "updatedAt": "2026-11-25"
+  "updatedAt": "2026-11-26"
 }

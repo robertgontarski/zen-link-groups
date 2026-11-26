@@ -26,7 +26,7 @@ The banner is an illustration. The two images above are real screenshots, taken 
   - A tab dropped into the middle of a group joins it.
   - A dragged parent takes its children along.
 - **Closing the parent.** The first child takes over the group and keeps its color. A group left with a single tab disappears.
-- **Pinned parent and Essentials.** The children stay grouped in the tab list, and the parent is marked in the group's color.
+- **Pinned parent and Essentials.** The children stay grouped in the tab list, under a slim row that shows the parent's icon and title, so the tree still has a visible start. Click the row to jump to the parent. Its arrow collapses the group into the parent's badge, and the row goes away with the children.
 - **Glance.** A link clicked in a Glance preview joins the group of the tab the preview was opened from. A Glance opened as a regular tab joins that group too.
 - **Tab context menu.** It gains *Collapse / Expand group*, *Remove from group*, *Ungroup* and *Close group*. A pinned parent stays open; only its children close. The labels are in English, or in Polish when the browser runs in Polish.
 - **Persistence.** Groups survive a browser restart and reopening a closed tab (Cmd+Shift+T). They show up in every synced Zen window.
@@ -98,6 +98,7 @@ After a change, run `./install.sh` and restart Zen.
 - **Tab identity.** The key is Zen's `tab.id`. Zen saves it in the session as `zenSyncId`, and a tab has the same id in every synced window. That lets one shared state (`store.sys.mjs`, saved to `zen-link-groups.json`) serve all windows and survive a restart.
 - **Drag and drop.** After a tab is dropped, the mod derives membership from the tab order (`reconcileSection` in `model.sys.mjs`). Only the window you are working in recomputes it. The other windows, into which Zen mirrors tab moves, only repaint.
 - **Look.** The controller sets `zlg-*` attributes on the tabs and the CSS draws from them. The indent reuses `--zen-folder-indent`, the variable Zen uses for folders.
+- **Parent outside the tab list.** A pinned parent sits in another part of the sidebar than its children. The controller puts a `.zlg-anchor` row above the first visible child. The row is not a tab, and Zen leaves anything that is not a tab out when it lists or drags tabs. A right click on it opens the parent's context menu.
 
 ```text
 src/JS/zenLinkGroups.uc.js              window controller: tab events, drag and drop, rendering, menu
@@ -112,12 +113,12 @@ test/                                   unit and end-to-end tests
 ## Tests
 
 ```sh
-node --test test/*.test.mjs                  # group logic, 20 tests
+node --test test/*.test.mjs                  # group logic, 21 tests
 python3 -I test/e2e.py --out /tmp/zlg-e2e    # end to end on a real Zen, headless
 python3 -I test/e2e.py --layout sine --out /tmp/zlg-e2e-sine   # the same, installed the way Sine does it
 ```
 
-The end-to-end test does not touch your profile or `Zen.app`. It starts Zen through Marionette on a temporary profile, turns the loader on in the running browser and clicks real links. It checks 15 scenarios, including drag and drop, the context menu, a second window and a restart, and saves sidebar screenshots to the `--out` directory. With `--headed` you can watch the browser window. It needs only Python 3 (standard library).
+The end-to-end test does not touch your profile or `Zen.app`. It starts Zen through Marionette on a temporary profile, turns the loader on in the running browser and clicks real links. It checks 16 scenarios, including drag and drop, a pinned parent, the context menu, a second window and a restart, and saves sidebar screenshots to the `--out` directory. With `--headed` you can watch the browser window. It needs only Python 3 (standard library).
 
 `--layout sine` runs the same scenarios with the mod installed the way the Sine mod manager does it: served from `chrome://sine/content/<mod id>/`, with the script named in `theme.json` loaded into each window and the style applied as a user sheet. Sine itself is not started.
 

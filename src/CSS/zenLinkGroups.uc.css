@@ -33,7 +33,8 @@
   --zlg-c7: light-dark(#d23b3b, #ff7b7b);
 }
 
-.tabbrowser-tab {
+.tabbrowser-tab,
+.zlg-anchor {
   &[zlg-color="0"] { --zlg-color: var(--zlg-c0); }
   &[zlg-color="1"] { --zlg-color: var(--zlg-c1); }
   &[zlg-color="2"] { --zlg-color: var(--zlg-c2); }
@@ -86,10 +87,112 @@
     border-end-start-radius: var(--zlg-elbow-radius);
   }
 
-  /* Root outside this list (pinned, Essentials): the run starts with a dot. */
-  &[zlg-role="member"][zlg-orphan]::before {
+  /* Root outside this list (pinned, Essentials): the line comes down from the
+   * anchor row above. Without one, the run starts with a dot. */
+  &[zlg-role="member"][zlg-orphan]:not(.zlg-anchor + *)::before {
     top: 30%;
     border-start-start-radius: var(--zlg-line-width);
+  }
+}
+
+/* ---- Anchor: stands in for a root that sits outside the tab list ---- */
+
+.zlg-anchor {
+  --zlg-anchor-icon: 14px;
+  position: relative;
+  flex-shrink: 0;
+  min-height: 26px;
+  /* The icon sits on the tree line, where a root's icon would be. */
+  padding-inline: calc(var(--zlg-line-x) - var(--zlg-anchor-icon) / 2) 6px;
+  font-size: 0.85em;
+
+  /* Trunk: from under the icon down to the first member. */
+  &::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset-inline-start: calc(var(--zlg-line-x) - var(--zlg-line-width) / 2);
+    top: calc(50% + var(--zlg-anchor-icon) / 2 + 3px);
+    bottom: calc(-1 * var(--zlg-gap));
+    border-inline-start: var(--zlg-line-width) solid var(--zlg-color);
+  }
+
+  /* The collapsed sidebar draws no tree, so there is nothing to anchor. */
+  :root:not([zen-sidebar-expanded="true"]) & {
+    display: none;
+  }
+}
+
+.zlg-anchor-link {
+  min-width: 0;
+  gap: 8px;
+  cursor: pointer;
+  opacity: 0.65;
+
+  &:hover {
+    opacity: 1;
+  }
+
+  /* Clicks land on the link itself, which knows its tab. */
+  & > * {
+    pointer-events: none;
+  }
+}
+
+.zlg-anchor-icon {
+  flex-shrink: 0;
+  width: var(--zlg-anchor-icon);
+  height: var(--zlg-anchor-icon);
+  border-radius: 4px;
+  -moz-context-properties: fill;
+  fill: currentColor;
+
+  /* A page without an icon gets the blank tile Zen draws in its tab. */
+  &:not([src]),
+  &:-moz-broken {
+    content: url("chrome://browser/skin/zen-icons/blank.svg");
+    background: var(--zen-toolbar-element-bg);
+  }
+}
+
+.zlg-anchor-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* "Go up to the tab these came from": the back arrow, pointing up. */
+.zlg-anchor-arrow {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  list-style-image: url("chrome://browser/skin/back.svg");
+  -moz-context-properties: fill;
+  fill: currentColor;
+  rotate: 90deg;
+}
+
+.zlg-anchor-collapse {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.65;
+
+  &:hover {
+    opacity: 1;
+    background-color: color-mix(in srgb, currentColor 12%, transparent);
+  }
+
+  & > .zlg-anchor-twisty {
+    width: 10px;
+    height: 10px;
+    list-style-image: url("chrome://global/skin/icons/arrow-down-12.svg");
+    -moz-context-properties: fill;
+    fill: currentColor;
+    pointer-events: none;
   }
 }
 

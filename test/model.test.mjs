@@ -197,3 +197,12 @@ test("members of a root outside the section start an orphan run", () => {
   assert.equal(map.get("a").orphan, true);
   assert.equal(map.get("b").last, true);
 });
+
+test("a collapsed orphan run is marked only while one of its members shows", () => {
+  // The controller puts an anchor row above the member marked `orphan`.
+  const hidden = layout(section("x", "R>a", "R>b"), { isCollapsed: () => true });
+  assert.equal([...hidden.values()].some(decoration => decoration.orphan), false);
+  const selected = layout(section("x", "R>a", "R>b"), { isCollapsed: () => true, selectedId: "b" });
+  assert.equal(selected.get("b").orphan, true);
+  assert.equal(selected.get("a").orphan, undefined);
+});

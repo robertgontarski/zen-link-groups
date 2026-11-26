@@ -287,6 +287,30 @@ return {
 };
 """
 
+# The anchor rows standing in for roots outside the tab list: what each shows,
+# the tab it sits above, and where its icon, its trunk and the line of the
+# member below are drawn.
+ANCHORS = """
+const axis = (el, pseudo) => {
+  const style = getComputedStyle(el, pseudo);
+  return el.getBoundingClientRect().left + parseFloat(style.left) + parseFloat(style.borderInlineStartWidth) / 2;
+};
+return [...document.querySelectorAll(".zlg-anchor")].map(anchor => {
+  const next = anchor.nextElementSibling;
+  const icon = anchor.querySelector(".zlg-anchor-icon").getBoundingClientRect();
+  return {
+    label: anchor.querySelector(".zlg-anchor-label").textContent,
+    before: next?.label ?? null,
+    color: anchor.getAttribute("zlg-color"),
+    height: anchor.getBoundingClientRect().height,
+    iconX: icon.left + icon.width / 2,
+    trunkX: axis(anchor, "::after"),
+    lineX: next ? axis(next, "::before") : null,
+    lineTop: next ? parseFloat(getComputedStyle(next, "::before").top) : null,
+  };
+});
+"""
+
 RENDERED_GROUPS = """
 const result = {};
 const roots = gBrowser.tabs.filter(t => t.getAttribute("zlg-role") === "root");
@@ -301,16 +325,17 @@ return result;
 """
 
 
-# Opens the tab context menu on a tab, reports which of our items are hidden,
-# optionally runs one of them.
+# Opens the tab context menu on a tab, or on the element `arguments[2]` selects,
+# reports which of our items are hidden, optionally runs one of them.
 CONTEXT_MENU = """
 const tab = gBrowser.tabs.find(t => t.label === arguments[0] && !t.closing);
+const target = arguments[2] ? document.querySelector(arguments[2]) : tab;
 const menu = document.getElementById("tabContextMenu");
 const shown = new Promise(resolve => menu.addEventListener("popupshown", resolve, { once: true }));
-// A right click on the middle of the tab, as EventUtils does it.
-tab.scrollIntoView({ block: "center" });
-const r = tab.getBoundingClientRect();
-tab.dispatchEvent(new MouseEvent("contextmenu", {
+// A right click on the middle of the target, as EventUtils does it.
+target.scrollIntoView({ block: "center" });
+const r = target.getBoundingClientRect();
+target.dispatchEvent(new MouseEvent("contextmenu", {
   bubbles: true,
   cancelable: true,
   button: 2,
@@ -589,11 +614,72 @@ def scenario(run):
     run.check("Forum is pinned and still a root", forum["pinned"] and forum["role"] == "root", forum)
     run.check("its members stay grouped", len(forum_members) == 4, s)
     run.check("their run starts as an orphan", forum_members and forum_members[0]["orphan"], forum_members[:1])
+    anchors = run.m.js(ANCHORS)
+    anchor = anchors[0] if len(anchors) == 1 else None
+    run.check("one anchor row stands in for Forum", anchor and anchor["label"] == "Forum", anchors)
+    run.check("it sits right above the first member", anchor and anchor["before"] == forum_members[0]["label"], anchors)
+    run.check("it has the group's color", anchor and anchor["color"] == forum_members[0]["color"], anchors)
+    run.check(
+        "its icon, its trunk and the member line share one axis",
+        anchor
+        and abs(anchor["iconX"] - anchor["trunkX"]) <= 0.5
+        and abs(anchor["trunkX"] - anchor["lineX"]) <= 0.5,
+        anchors,
+    )
+    run.check("the member line comes down from the anchor", anchor and anchor["lineTop"] <= 0, anchors)
+    # The list is longer than the window: show the pinned root and its anchor.
+    run.tab_eval("Forum", "tab.scrollIntoView({ block: 'start', behavior: 'instant' }); return true;")
+    run.settle(0.3)
     run.screenshot("pinned-root")
+
+    print("9b. The anchor leads to the root and tucks the group away")
+    run.tab_eval("Article 1", "gBrowser.selectedTab = tab; return true;")
+    run.settle(0.3)
+    run.m.js("document.querySelector('.zlg-anchor-link').click(); return true;")
+    run.settle(0.3)
+    run.check("a click on the anchor selects Forum", run.m.js("return gBrowser.selectedTab.label") == "Forum")
+    run.m.js("document.querySelector('.zlg-anchor-collapse').click(); return true;")
+    run.settle()
+    members = [t for t in run.state("Thread 1") if t["label"] in ("Thread 1", "Mail", "Thread 2", "Thread 3")]
+    forum = run.m.js(
+        "const t = gBrowser.tabs.find(t => t.label === 'Forum');"
+        "return { collapsed: t.hasAttribute('zlg-collapsed'), count: t.querySelector('.zlg-count')?.getAttribute('value') };"
+    )
+    run.check("its arrow collapses the group", len(members) == 4 and all(t["hidden"] for t in members), members)
+    run.check("the anchor goes away with the members", run.m.js(ANCHORS) == [])
+    run.check("the pinned root keeps the count", forum == {"collapsed": True, "count": "4"}, forum)
+    run.screenshot("pinned-root-collapsed")
+    run.tab_eval("Thread 2", "gBrowser.selectedTab = tab; return true;")
+    run.settle(0.3)
+    anchors = run.m.js(ANCHORS)
+    run.check(
+        "a selected member of a collapsed group shows under its anchor",
+        len(anchors) == 1 and anchors[0]["before"] == "Thread 2",
+        anchors,
+    )
+    # Thread 2 is selected: a menu that fell back to the selected tab would offer 'Remove from group'.
+    items = run.m.js(CONTEXT_MENU, "Forum", "zlg-context-collapse", ".zlg-anchor-link")
+    run.check(
+        "a right click on the anchor opens the root's menu",
+        items["zlg-context-remove"] and not items["zlg-context-collapse"],
+        items,
+    )
+    members = [t for t in run.state("Thread 1") if t["label"] in ("Thread 1", "Mail", "Thread 2", "Thread 3")]
+    anchors = run.m.js(ANCHORS)
+    run.check("'Expand group' from that menu brings the members back", not any(t["hidden"] for t in members), members)
+    run.check(
+        "the anchor is back above the first member",
+        len(anchors) == 1 and anchors[0]["before"] == forum_members[0]["label"],
+        anchors,
+    )
+    run.tab_eval("Mail", "gBrowser.selectedTab = tab; return true;")
+    run.settle(0.3)
 
     print("10. Collapsed sidebar")
     run.m.js("Services.prefs.setBoolPref('zen.view.sidebar-expanded', false); return true;")
     run.settle()
+    anchors = run.m.js(ANCHORS)
+    run.check("the anchor is hidden, there is no tree to hold", len(anchors) == 1 and anchors[0]["height"] == 0, anchors)
     run.screenshot("sidebar-collapsed")
     run.m.js("Services.prefs.setBoolPref('zen.view.sidebar-expanded', true); return true;")
     run.settle()
@@ -614,6 +700,8 @@ def scenario(run):
     run.m.send("WebDriver:SwitchToWindow", {"handle": run.m.window_handles()[-1], "focus": True})
     rendered = run.m.js(RENDERED_GROUPS)
     run.check("second window renders the same groups", rendered == expected, (rendered, expected))
+    anchors = run.m.js(ANCHORS)
+    run.check("...and the anchor of the pinned root", [a["label"] for a in anchors] == ["Forum"], anchors)
     run.screenshot("second-window")
     return expected
 
@@ -686,6 +774,8 @@ def main():
         run.settle(1.5)
         restored = m.js(RENDERED_GROUPS)
         run.check("same groups after restart", restored == expected, (restored, expected))
+        anchors = m.js(ANCHORS)
+        run.check("the pinned root has its anchor again", [a["label"] for a in anchors] == ["Forum"], anchors)
         run.screenshot("after-restart")
 
         print("14. Context menu")
@@ -715,6 +805,7 @@ def main():
             run.m.js("return gBrowser.tabs.some(t => t.label === 'Forum' && t.pinned && !t.closing)"),
         )
         run.check("no groups are left", run.groups() == {}, run.groups())
+        run.check("the anchor is gone with its group", m.js(ANCHORS) == [], m.js(ANCHORS))
         items = run.m.js(CONTEXT_MENU, "Mail", None)
         run.check("an ungrouped tab shows none of the items", all(items.values()), items)
         errors = m.js(MOD_ERRORS)

@@ -26,7 +26,15 @@
   const { LinkGroupsStore: store } = ChromeUtils.importESModule(BASE + "store.sys.mjs");
   const model = ChromeUtils.importESModule(BASE + "model.sys.mjs");
 
-  const TAB_EVENTS = ["TabOpen", "TabClose", "TabMove", "TabSelect", "TabPinned", "TabUnpinned"];
+  const TAB_EVENTS = [
+    "TabOpen",
+    "TabClose",
+    "TabMove",
+    "TabSelect",
+    "TabPinned",
+    "TabUnpinned",
+    "TabAttrModified",
+  ];
   const DECORATIONS = [
     "zlg-role",
     "zlg-color",
@@ -45,6 +53,7 @@
   const SETTLE_MS = 80;
   const OPEN_RETRIES = 10;
   const RECENTLY_CLOSED_LIMIT = 50;
+  const HTML_NS = "http://www.w3.org/1999/xhtml";
 
   const STRINGS = {
     en: {
@@ -54,6 +63,7 @@
       ungroup: "Ungroup",
       closeGroup: "Close group",
       toggleTooltip: count => `${count} tab${count === 1 ? "" : "s"} opened from here – click to collapse or expand`,
+      anchorTooltip: title => `Opened from “${title}” – click to go to that tab`,
     },
     pl: {
       collapse: "Zwiń grupę",
@@ -62,6 +72,7 @@
       ungroup: "Rozgrupuj",
       closeGroup: "Zamknij grupę",
       toggleTooltip: count => `Karty otwarte stąd: ${count} – kliknij, aby zwinąć lub rozwinąć`,
+      anchorTooltip: title => `Otwarte z karty „${title}” – kliknij, aby do niej przejść`,
     },
   };
   const t = Services.locale.appLocaleAsBCP47.startsWith("pl") ? STRINGS.pl : STRINGS.en;
@@ -110,6 +121,8 @@
     /** glance tab -> { parent, observer } until the glance is opened fully. */
     #glances = new Map();
     #decorated = new Set();
+    /** Anchor rows currently in the tab list, see #renderAnchors. */
+    #anchors = [];
     #menu = null;
     /** Tab the context menu was opened on. */
     #menuTab = null;
@@ -147,6 +160,10 @@
         observer.disconnect();
       }
       this.#glances.clear();
+      for (const anchor of this.#anchors) {
+        anchor.remove();
+      }
+      this.#anchors = [];
       clearTimeout(this.#openTimer);
       clearTimeout(this.#reconcileTimer);
       clearTimeout(this.#renderTimer);
@@ -172,6 +189,16 @@
         case "TabSelect":
         case "TabUnpinned":
           this.scheduleRender();
+          break;
+        case "TabAttrModified":
+          // An anchor shows its root's title and icon.
+          if (
+            this.#anchors.length &&
+            store.isRoot(event.target.id) &&
+            event.detail?.changed?.some(name => name === "label" || name === "image")
+          ) {
+            this.scheduleRender();
+          }
           break;
         case "popupshowing":
           if (event.target.id === "tabContextMenu") {
@@ -522,12 +549,16 @@
       const selectedId = gBrowser.selectedTab?.id ?? null;
       const isCollapsed = id => !!store.info(id)?.collapsed;
       const next = new Map();
+      const anchors = [];
       for (const section of this.#sections()) {
         const decorations = model.layout(this.#itemsOf(section), { isCollapsed, selectedId });
         for (const [id, decoration] of decorations) {
           const tab = this.#tabById(id);
           if (tab) {
             next.set(tab, decoration);
+            if (decoration.orphan) {
+              anchors.push({ gid: decoration.gid, before: tab });
+            }
           }
         }
       }
@@ -547,7 +578,130 @@
         this.#decorate(tab, decoration);
       }
       this.#decorated = new Set(next.keys());
+      this.#renderAnchors(anchors);
     }
+
+    /**
+     * A run whose root sits outside its section (pinned, an Essential, in a
+     * split view) gets an anchor row above it: the root's icon and title, so
+     * the tree has something to hang from. It is not a tab, and Zen skips it
+     * when it lists or drags tabs.
+     *
+     * @param {Array<{gid: string, before: Element}>} wanted
+     *        `before` is the first visible member of the run.
+     */
+    #renderAnchors(wanted) {
+      const spare = new Set(this.#anchors);
+      const kept = [];
+      for (const { gid, before } of wanted) {
+        const root = this.#tabById(gid);
+        // A root in the same section is only briefly apart from its run.
+        if (!isAlive(root) || root.parentElement === before.parentElement) {
+          continue;
+        }
+        let anchor = [...spare].find(el => el.getAttribute("zlg-gid") === gid);
+        if (anchor) {
+          spare.delete(anchor);
+        } else {
+          anchor = this.#createAnchor();
+        }
+        this.#updateAnchor(anchor, root, gid);
+        if (anchor.nextElementSibling !== before) {
+          before.before(anchor);
+        }
+        kept.push(anchor);
+      }
+      for (const anchor of spare) {
+        anchor.remove();
+      }
+      this.#anchors = kept;
+    }
+
+    #createAnchor() {
+      const box = className => {
+        const el = document.createXULElement("hbox");
+        el.className = className;
+        el.setAttribute("align", "center");
+        return el;
+      };
+      const image = className => {
+        const el = document.createXULElement("image");
+        el.className = className;
+        return el;
+      };
+      const anchor = box("zlg-anchor");
+      anchor.setAttribute("context", "tabContextMenu");
+
+      const link = box("zlg-anchor-link");
+      link.setAttribute("role", "button");
+      link.setAttribute("flex", "1");
+      const icon = document.createElementNS(HTML_NS, "img");
+      icon.className = "zlg-anchor-icon";
+      icon.setAttribute("role", "presentation");
+      const label = document.createElementNS(HTML_NS, "span");
+      label.className = "zlg-anchor-label";
+      link.append(icon, label, image("zlg-anchor-arrow"));
+
+      const collapse = box("zlg-anchor-collapse");
+      collapse.setAttribute("role", "button");
+      collapse.setAttribute("pack", "center");
+      collapse.setAttribute("aria-label", t.collapse);
+      collapse.setAttribute("tooltiptext", t.collapse);
+      collapse.append(image("zlg-anchor-twisty"));
+
+      anchor.append(link, collapse);
+      // The tab context menu (Firefox's code and ours) reads the tab it is
+      // for from `triggerNode.tab`: a right click here is one on the root.
+      for (const el of [anchor, link, collapse]) {
+        Object.defineProperty(el, "tab", {
+          get: () => this.#tabById(anchor.getAttribute("zlg-gid")),
+        });
+      }
+      for (const type of ["mousedown", "mouseup", "click", "dblclick"]) {
+        anchor.addEventListener(type, this.#onAnchorEvent);
+      }
+      return anchor;
+    }
+
+    #updateAnchor(anchor, root, gid) {
+      setAttr(anchor, "zlg-gid", gid);
+      setAttr(anchor, "zlg-color", store.info(gid)?.color ?? 0);
+      const title = root.label ?? "";
+      const link = anchor.querySelector(".zlg-anchor-link");
+      setAttr(link, "aria-label", t.anchorTooltip(title));
+      setAttr(link, "tooltiptext", t.anchorTooltip(title));
+      const label = anchor.querySelector(".zlg-anchor-label");
+      if (label.textContent !== title) {
+        label.textContent = title;
+      }
+      // The same attributes the tab's own icon is loaded with; a page without
+      // an icon leaves `src` unset and the stylesheet draws a blank tile.
+      const icon = anchor.querySelector(".zlg-anchor-icon");
+      setAttr(icon, "requestcontextid", root.getAttribute("requestcontextid"));
+      setAttr(icon, "src", root.getAttribute("image") || null);
+    }
+
+    /** The anchor is not a tab: the tab strip must not act on clicks on it. */
+    #onAnchorEvent = event => {
+      if (event.button === 2) {
+        // A right click opens the root's context menu.
+        return;
+      }
+      event.stopPropagation();
+      event.preventDefault();
+      if (event.type !== "click" || event.button !== 0) {
+        return;
+      }
+      const gid = event.currentTarget.getAttribute("zlg-gid");
+      if (event.target.closest(".zlg-anchor-collapse")) {
+        this.toggleCollapsed(gid);
+        return;
+      }
+      const root = this.#tabById(gid);
+      if (isAlive(root)) {
+        gBrowser.selectedTab = root;
+      }
+    };
 
     #decorate(tab, { role, gid, trunk, first, last, orphan, hidden }) {
       const info = store.info(gid);

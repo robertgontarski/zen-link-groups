@@ -295,6 +295,25 @@ return {
 };
 """
 
+# Where the root's trunk starts against the bottom of its icon, at Zen's tab
+# height and at the lower ones a theme or Zen Link Size can give.
+TRUNK_START = """
+const root = gBrowser.tabs.find(t => t.label === arguments[0] && !t.closing);
+const result = {};
+for (const height of [null, "24px"]) {
+  if (height) root.style.setProperty("--tab-min-height", height);
+  const tab = root.getBoundingClientRect();
+  const icon = root.querySelector(".tab-icon-image").getBoundingClientRect();
+  result[height ?? "zen"] = {
+    tab: tab.height,
+    iconBottom: icon.bottom - tab.top,
+    trunkTop: parseFloat(getComputedStyle(root, "::after").top),
+  };
+}
+root.style.removeProperty("--tab-min-height");
+return result;
+"""
+
 # The anchor rows standing in for roots outside the tab list: what each shows,
 # the tab it sits above, and where its icon, its trunk and the line of the
 # member below are drawn.
@@ -565,6 +584,13 @@ def scenario(run):
     drawn = run.m.js(DRAWN, "News")
     solid = '"" absolute 2px solid'
     run.check("the trunk and the member line are drawn", drawn["trunk"] == solid and drawn["line"] == solid, drawn)
+    start = run.m.js(TRUNK_START, "News")
+    run.check(
+        "the trunk starts right under the root's icon, in Zen's tabs and in lower ones",
+        start["24px"]["tab"] < start["zen"]["tab"]
+        and all(abs(s["trunkTop"] - s["iconBottom"]) <= 0.5 for s in start.values()),
+        start,
+    )
     run.check("the last member gets an elbow", drawn["elbow"] == "solid", drawn)
     run.check("the badge has the color of the line", drawn["badgeColor"] == drawn["lineColor"], drawn)
     run.check("the count sits tight in the badge", drawn["countMargin"] == "0px", drawn)

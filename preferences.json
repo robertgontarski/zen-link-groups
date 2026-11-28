@@ -1,0 +1,20 @@
+[
+  {
+    "property": "zen-link-groups.indent",
+    "label": "Indent of child tabs (empty: 18px)",
+    "type": "string",
+    "placeholder": "e.g. 18px"
+  },
+  {
+    "property": "zen-link-groups.line-width",
+    "label": "Thickness of the tree line (empty: 2px)",
+    "type": "string",
+    "placeholder": "e.g. 2px"
+  },
+  {
+    "property": "zen-link-groups.line-x",
+    "label": "Tree line from the tab's left edge (empty: 19.5px)",
+    "type": "string",
+    "placeholder": "e.g. 19.5px"
+  }
+]

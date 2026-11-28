@@ -110,6 +110,16 @@ class LinkGroupsStoreImpl {
   }
 
   /**
+   * Drops groups of tabs that are gone now, for when the mod is switched
+   * back on in Zen Mods: tabs closed meanwhile never told the store.
+   *
+   * @param {() => Set<string>} collectLiveIds
+   */
+  prune(collectLiveIds) {
+    this.#commit(this.#state.prune(collectLiveIds()));
+  }
+
+  /**
    * Tab moves made by the mod itself. Every window ignores TabMove while this
    * is non-zero, including the mirrored moves Zen's window sync makes.
    */

@@ -12,6 +12,7 @@
   "style": {
     "chrome": "src/CSS/zenLinkGroups.uc.css"
   },
+  "preferences": "preferences.json",
   "scripts": {
     "src/JS/zenLinkGroups.uc.js": {
       "name": "Zen Link Groups",

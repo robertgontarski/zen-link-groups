@@ -18,5 +18,7 @@ jobs:
           node-version: lts/*
       - name: Unit tests
         run: node --test test/*.test.mjs
+      - name: Installer and manifest
+        run: python3 -I -m unittest discover -s test -p 'test_*.py' -v
       - name: Lint installer
         run: shellcheck install.sh

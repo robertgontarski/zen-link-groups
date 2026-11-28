@@ -26,6 +26,15 @@
   const { LinkGroupsStore: store } = ChromeUtils.importESModule(BASE + "store.sys.mjs");
   const model = ChromeUtils.importESModule(BASE + "model.sys.mjs");
 
+  // install.sh also lists the mod in Zen's settings (Zen Mods), where it can
+  // be switched off and set up; the script runs only while it is switched on
+  // there. Sine switches its mods itself, so under Sine the script just runs.
+  const MOD_ID = "zen-link-groups";
+  const IN_ZEN_MODS = !HERE.startsWith("chrome://sine/");
+  // Zen flips the first after every change to its mods (switched, removed,
+  // settings); the second switches all mods off at once.
+  const SWITCH_PREFS = ["zen.mods.updated-value-observer", "zen.themes.disable-all"];
+
   const TAB_EVENTS = [
     "TabOpen",
     "TabClose",
@@ -107,6 +116,25 @@
     return ids;
   }
 
+  /** Whether the mod is switched on in Zen Mods (always true outside them). */
+  async function switchedOn() {
+    if (!IN_ZEN_MODS) {
+      return true;
+    }
+    if (Services.prefs.getBoolPref("zen.themes.disable-all", false)) {
+      return false;
+    }
+    try {
+      // Zen writes this list before it flips the pref, so it is current here.
+      const mods = await IOUtils.readJSON(PathUtils.join(PathUtils.profileDir, "zen-themes.json"));
+      const mod = mods?.[MOD_ID];
+      return !!mod && mod.enabled !== false;
+    } catch {
+      // No list: the mod was never added to Zen Mods, or was removed there.
+      return false;
+    }
+  }
+
   class ZenLinkGroups {
     /** @type {WeakMap<Element, Element|null>} opener captured at TabOpen */
     #openers = new WeakMap();
@@ -130,7 +158,16 @@
     #reconcileTimer = null;
     #renderTimer = null;
     #unsubscribe = null;
+    /** True while the window follows its tabs: the mod is switched on. */
     #ready = false;
+    /** Switch changes, one after another. */
+    #switching = Promise.resolve();
+    #onSwitch = () => this.#followSwitch(false);
+
+    /** Whether the mod is running in this window (switched on in Zen Mods). */
+    get enabled() {
+      return this.#ready;
+    }
 
     async init() {
       await delayedStartupPromise;
@@ -139,23 +176,55 @@
       if (window.closed) {
         return;
       }
+      window.addEventListener("unload", this, { once: true });
+      this.#initContextMenu();
+      if (IN_ZEN_MODS) {
+        for (const pref of SWITCH_PREFS) {
+          Services.prefs.addObserver(pref, this.#onSwitch);
+        }
+      }
+      await this.#followSwitch(true);
+    }
+
+    /** Starts or stops the mod in this window to match its switch in Zen Mods. */
+    #followSwitch(atStartup) {
+      this.#switching = this.#switching.then(async () => {
+        const on = await switchedOn();
+        if (window.closed) {
+          return;
+        }
+        if (on && !this.#ready) {
+          this.#start(atStartup);
+        } else if (!on && this.#ready) {
+          this.#stop();
+        }
+      });
+      return this.#switching;
+    }
+
+    #start(atStartup) {
       for (const type of TAB_EVENTS) {
         window.addEventListener(type, this);
       }
-      window.addEventListener("unload", this, { once: true });
       this.#unsubscribe = store.subscribe(() => this.scheduleRender());
-      this.#initContextMenu();
       this.#ready = true;
-      SessionStore.promiseAllWindowsRestored.then(() => store.pruneOnce(collectLiveIds));
+      if (atStartup) {
+        SessionStore.promiseAllWindowsRestored.then(() => store.pruneOnce(collectLiveIds));
+      } else {
+        // Switched back on: drop what tabs closed in the meantime left behind.
+        store.prune(collectLiveIds);
+      }
       this.scheduleRender();
     }
 
-    #uninit() {
+    /** Stops following tabs and takes everything the mod drew off them. */
+    #stop() {
       this.#ready = false;
       for (const type of TAB_EVENTS) {
         window.removeEventListener(type, this);
       }
       this.#unsubscribe?.();
+      this.#unsubscribe = null;
       for (const { observer } of this.#glances.values()) {
         observer.disconnect();
       }
@@ -167,6 +236,14 @@
       clearTimeout(this.#openTimer);
       clearTimeout(this.#reconcileTimer);
       clearTimeout(this.#renderTimer);
+      this.#openTimer = this.#reconcileTimer = this.#renderTimer = null;
+      this.#pendingOpened.clear();
+      this.#touched.clear();
+      this.#fresh.clear();
+      for (const tab of this.#decorated) {
+        this.#undecorate(tab);
+      }
+      this.#decorated = new Set();
     }
 
     handleEvent(event) {
@@ -206,7 +283,14 @@
           }
           break;
         case "unload":
-          this.#uninit();
+          if (IN_ZEN_MODS) {
+            for (const pref of SWITCH_PREFS) {
+              Services.prefs.removeObserver(pref, this.#onSwitch);
+            }
+          }
+          if (this.#ready) {
+            this.#stop();
+          }
           break;
       }
     }
@@ -812,7 +896,8 @@
       const trigger = menu.triggerNode;
       const tab = trigger?.tab ?? trigger?.closest?.(".tabbrowser-tab") ?? gBrowser.selectedTab;
       this.#menuTab = tab;
-      const gid = tab?.id ? store.groupOf(tab.id) : null;
+      // Switched off, the items stay in the menu, hidden.
+      const gid = this.#ready && tab?.id ? store.groupOf(tab.id) : null;
       for (const node of Object.values(this.#menu)) {
         node.hidden = !gid;
       }

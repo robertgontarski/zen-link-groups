@@ -146,6 +146,14 @@ def build_profile(path, layout):
         shutil.copytree(ROOT / "src" / "CSS", chrome / "CSS")
     lines = [f"user_pref({json.dumps(k)}, {json.dumps(v)});" for k, v in PREFS.items()]
     (path / "user.js").write_text("\n".join(lines) + "\n")
+    if layout != "sine":
+        # install.sh also lists the mod in Zen Mods, which switches the script.
+        (path / "prefs.js").write_text("")
+        subprocess.run(
+            [sys.executable, "-I", str(ROOT / "tools" / "zen_mods.py"), "install", str(path),
+             "--style", "src/zen-mod/chrome.css"],
+            check=True, capture_output=True, text=True,
+        )
 
 
 def describe_layout(layout, profile):
@@ -355,6 +363,58 @@ await hiddenEvent;
 await new Promise(resolve => setTimeout(resolve, 600));
 return hidden;
 """
+
+
+# The mod's entry in Zen Mods, and whether the script runs in this window.
+ZEN_MOD_INFO = """
+const mod = (await gZenMods.getMods())["zen-link-groups"];
+return {
+  listed: !!mod,
+  enabled: mod?.enabled ?? null,
+  settings: mod ? (await gZenMods.getModPreferences(mod)).map(p => p.property) : [],
+  running: gZenLinkGroups.enabled,
+};
+"""
+
+# What the switch in Zen's settings does (gZenMarketplaceManager.enableMod/disableMod).
+SWITCH_MOD = """
+await (arguments[0] ? gZenMods.enableMod("zen-link-groups") : gZenMods.disableMod("zen-link-groups"));
+gZenMods.triggerModsUpdate();
+return true;
+"""
+
+# What a field of the mod's settings does when it changes.
+SET_SETTINGS = """
+for (const [property, value] of Object.entries(arguments[0])) {
+  Services.prefs.setStringPref(property, value);
+}
+gZenMods.triggerModsUpdate();
+return true;
+"""
+
+SETTINGS_APPLIED = """
+return Object.entries(arguments[0]).every(([property, value]) =>
+  document.documentElement.style.getPropertyValue("--" + property.replaceAll(".", "-")) === value);
+"""
+
+# How far members are indented and how thick their line is.
+MEMBER_STYLE = """
+const member = gBrowser.tabs.find(t => t.getAttribute("zlg-role") === "member" && !t.closing);
+return {
+  indent: getComputedStyle(member).marginInlineStart,
+  line: getComputedStyle(member, "::before").borderInlineStartWidth,
+};
+"""
+
+# Anything the mod draws in the window.
+DECORATIONS = """
+return {
+  tabs: gBrowser.tabs.filter(t => t.getAttributeNames().some(name => name.startsWith("zlg-"))).length,
+  toggles: document.querySelectorAll(".zlg-toggle").length,
+  anchors: document.querySelectorAll(".zlg-anchor").length,
+};
+"""
+NOTHING_DRAWN = {"tabs": 0, "toggles": 0, "anchors": 0}
 
 
 # Errors and console.error calls coming from the mod.
@@ -706,6 +766,76 @@ def scenario(run):
     return expected
 
 
+def zen_mods_scenario(run):
+    """The mod's switch and settings in Zen Mods, and removing it there."""
+    m = run.m
+    if run.layout["inject"]:
+        info = m.js(ZEN_MOD_INFO)
+        run.check("under Sine the script runs without an entry in Zen Mods", info["running"] and not info["listed"], info)
+        return
+
+    info = m.js(ZEN_MOD_INFO)
+    settings = json.loads((ROOT / "preferences.json").read_text())
+    run.check(
+        "Zen Mods lists the mod, switched on, with its settings",
+        info == {"listed": True, "enabled": True, "settings": [p["property"] for p in settings], "running": True},
+        info,
+    )
+    # A new group under the pinned Forum, which also brings an anchor row.
+    # After the restart Forum has not loaded its page yet; a navigation waits
+    # for the load.
+    handle = m.js(TAB_BY_TITLE, "Forum")
+    m.context("content")
+    m.send("WebDriver:SwitchToWindow", {"handle": handle, "focus": True})
+    m.send("WebDriver:Navigate", {"url": (FIXTURES / "forum.html").as_uri()})
+    run.chrome_window()
+    run.click("Forum", "#f1")
+    run.click("Forum", "#f2")
+    drawn = m.js(RENDERED_GROUPS)
+    run.check("a new group is drawn", drawn == {"Forum": ["Thread 1", "Thread 2"]}, drawn)
+
+    values = {"zen-link-groups.indent": "30px", "zen-link-groups.line-width": "3px"}
+    m.js(SET_SETTINGS, values)
+    m.wait(SETTINGS_APPLIED, values, message="the settings to reach the window")
+    run.settle(0.3)
+    style = m.js(MEMBER_STYLE)
+    run.check("the settings set the indent and the line", style == {"indent": "30px", "line": "3px"}, style)
+    run.screenshot("zen-mods-settings")
+    m.js(SET_SETTINGS, {key: "" for key in values})
+    m.wait(SETTINGS_APPLIED, {key: "" for key in values}, message="the settings to empty")
+    run.settle(0.3)
+    style = m.js(MEMBER_STYLE)
+    run.check("empty settings bring the defaults back", style == {"indent": "18px", "line": "2px"}, style)
+
+    m.js(SWITCH_MOD, False)
+    m.wait("return !gZenLinkGroups.enabled", message="the script to stop")
+    run.settle(0.3)
+    off = m.js(DECORATIONS)
+    run.check("switched off in Zen Mods, nothing is drawn", off == NOTHING_DRAWN, off)
+    items = m.js(CONTEXT_MENU, "Thread 1", None)
+    run.check("...and the tab menu has none of the items", all(items.values()), items)
+    run.click("Forum", "#f3", cmd=True)
+    groups = run.groups()
+    run.check("...and a link opens ungrouped", groups == {"Forum": ["Thread 1", "Thread 2"]}, groups)
+    run.screenshot("zen-mods-off")
+
+    m.js(SWITCH_MOD, True)
+    m.wait("return gZenLinkGroups.enabled", message="the script to start")
+    run.settle()
+    drawn = m.js(RENDERED_GROUPS)
+    run.check("switched on again, the group is back", drawn == {"Forum": ["Thread 1", "Thread 2"]}, drawn)
+    run.check("...with its anchor", [a["label"] for a in m.js(ANCHORS)] == ["Forum"], m.js(ANCHORS))
+
+    m.js("await gZenMods.removeMod('zen-link-groups'); return true;")
+    m.wait("return !gZenLinkGroups.enabled", message="the script to stop")
+    run.settle(0.3)
+    off = m.js(DECORATIONS)
+    folder = m.js(
+        "return IOUtils.exists(PathUtils.join(PathUtils.profileDir, 'chrome', 'zen-themes', 'zen-link-groups'));"
+    )
+    run.check("removed in Zen Mods, the script stops and nothing is drawn", off == NOTHING_DRAWN and not folder, off)
+
+
 def start_zen(args, profile, layout, log_name):
     binary = Path(args.zen) / "Contents" / "MacOS" / "zen"
     cmd = [str(binary), "--marionette", "-no-remote", "-profile", str(profile)]
@@ -808,6 +938,9 @@ def main():
         run.check("the anchor is gone with its group", m.js(ANCHORS) == [], m.js(ANCHORS))
         items = run.m.js(CONTEXT_MENU, "Mail", None)
         run.check("an ungrouped tab shows none of the items", all(items.values()), items)
+
+        print("15. Zen Mods")
+        zen_mods_scenario(run)
         errors = m.js(MOD_ERRORS)
         run.check("no errors from the mod in the browser console", not errors, errors)
     finally:

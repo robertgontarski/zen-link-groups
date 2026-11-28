@@ -1,0 +1,11 @@
+/* Zen Link Groups in Zen Mods: its switch and its settings.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ *
+ * The groups are drawn by src/CSS/zenLinkGroups.uc.css, which the
+ * fx-autoconfig loader applies next to Zen's own styles; Zen puts mods below
+ * those, where some of its rules would lose. That sheet draws only from the
+ * zlg-* attributes the script sets, and the script runs only while this mod
+ * is switched on, so switching it off here clears the groups as well. */

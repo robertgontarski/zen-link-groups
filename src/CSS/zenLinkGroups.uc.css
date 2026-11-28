@@ -13,10 +13,13 @@
 :root {
   /* How far members are pushed right, where the tree line runs (from the
    * left edge of the root tab: the middle of its icon), and where the elbow
-   * into the last member ends (from the member's left edge). */
-  --zlg-indent: 18px;
-  --zlg-line-x: 19.5px;
-  --zlg-line-width: 2px;
+   * into the last member ends (from the member's left edge).
+   * The first three are the mod's settings in Zen Mods: Zen puts a filled-in
+   * field on :root as --zen-link-groups-<name>; an empty one keeps the
+   * default after the comma. */
+  --zlg-indent: var(--zen-link-groups-indent, 18px);
+  --zlg-line-x: var(--zen-link-groups-line-x, 19.5px);
+  --zlg-line-width: var(--zen-link-groups-line-width, 2px);
   --zlg-elbow-reach: 8px;
   --zlg-elbow-radius: 7px;
   /* Zen's tab boxes touch; lines reach this far into the tab above so they

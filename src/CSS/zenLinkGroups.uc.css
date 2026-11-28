@@ -72,7 +72,8 @@
 
   &[zlg-role="root"][zlg-trunk]::after {
     inset-inline-start: calc(var(--zlg-line-x) - var(--zlg-line-width) / 2);
-    top: 70%;
+    /* Right under the icon, which is 16px and centred at any tab height. */
+    top: calc(50% + 8px);
     bottom: calc(-1 * var(--zlg-gap));
   }
 
